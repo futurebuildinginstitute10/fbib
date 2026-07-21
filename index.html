@@ -2104,9 +2104,19 @@
             });
         }
 
+        var CATEGORY_DELIM = ' — ';
+        var selectedLangPrefix = null; // للمجالات المقسّمة (كاللغات) فقط
+
+        function splitCategoryName(name) {
+            var idx = name.indexOf(CATEGORY_DELIM);
+            if (idx === -1) return null;
+            return { prefix: name.substring(0, idx), suffix: name.substring(idx + CATEGORY_DELIM.length) };
+        }
+
         function selectField(fieldId) {
             selectedFieldId = fieldId;
             selectedCategoryId = null;
+            selectedLangPrefix = null;
 
             document.querySelectorAll('.domain-card-option').forEach(function (el) {
                 el.classList.remove('selected');
@@ -2117,31 +2127,68 @@
             var field = FIELDS.find(function (f) { return f.id === fieldId; });
             var fieldCategories = CATEGORIES.filter(function (c) { return c.fields === fieldId; });
 
+            // هل كل الأقسام تحت هذا المجال مبنية بصيغة "بادئة — لاحقة" (مثل اللغات)؟
+            var isGrouped = fieldCategories.length > 0 && fieldCategories.every(function (c) {
+                return splitCategoryName(c.name) !== null;
+            });
+
             var lvl2Title = document.getElementById('level2Title');
             var lvl2Content = document.getElementById('level2Content');
-            lvl2Title.innerHTML = '<i class="fa-solid fa-list-check"></i> الخطوة ②: حدد القسم المطلوب في (' + (field ? field.name : '') + '):';
             lvl2Content.innerHTML = '';
 
             var grid = document.createElement('div');
             grid.className = 'languages-selector-grid';
 
-            fieldCategories.forEach(function (cat, idx) {
-                var btn = document.createElement('div');
-                var isDefault = (idx === 0);
-                btn.className = 'lang-card-btn ' + (isDefault ? 'active' : '');
-                btn.innerHTML = cat.name;
-                btn.onclick = function () { selectCategory(cat.id, btn); };
-                grid.appendChild(btn);
-            });
+            if (isGrouped) {
+                lvl2Title.innerHTML = '<i class="fa-solid fa-list-check"></i> الخطوة ②: حدد اللغة المطلوبة في (' + (field ? field.name : '') + '):';
 
-            lvl2Content.appendChild(grid);
+                var prefixes = [];
+                fieldCategories.forEach(function (c) {
+                    var p = splitCategoryName(c.name).prefix;
+                    if (prefixes.indexOf(p) === -1) prefixes.push(p);
+                });
 
-            if (fieldCategories.length > 0) {
-                selectCategory(fieldCategories[0].id, grid.firstChild);
+                prefixes.forEach(function (prefix, idx) {
+                    var btn = document.createElement('div');
+                    btn.className = 'lang-card-btn ' + (idx === 0 ? 'active' : '');
+                    btn.innerHTML = prefix;
+                    btn.onclick = function () { selectLangPrefix(prefix, btn); };
+                    grid.appendChild(btn);
+                });
+
+                lvl2Content.appendChild(grid);
+                if (prefixes.length > 0) selectLangPrefix(prefixes[0], grid.firstChild);
+
             } else {
-                document.getElementById('level3Content').innerHTML = '';
-                document.getElementById('level3Title').innerHTML = '<i class="fa-solid fa-layer-group"></i> لا توجد أقسام متاحة حالياً';
+                lvl2Title.innerHTML = '<i class="fa-solid fa-list-check"></i> الخطوة ②: حدد القسم المطلوب في (' + (field ? field.name : '') + '):';
+
+                fieldCategories.forEach(function (cat, idx) {
+                    var btn = document.createElement('div');
+                    btn.className = 'lang-card-btn ' + (idx === 0 ? 'active' : '');
+                    btn.innerHTML = cat.name;
+                    btn.onclick = function () { selectCategory(cat.id, btn); };
+                    grid.appendChild(btn);
+                });
+
+                lvl2Content.appendChild(grid);
+
+                if (fieldCategories.length > 0) {
+                    selectCategory(fieldCategories[0].id, grid.firstChild);
+                } else {
+                    document.getElementById('level3Content').innerHTML = '';
+                    document.getElementById('level3Title').innerHTML = '<i class="fa-solid fa-layer-group"></i> لا توجد أقسام متاحة حالياً';
+                }
             }
+        }
+
+        function selectLangPrefix(prefix, btnEl) {
+            document.querySelectorAll('#level2Content .lang-card-btn').forEach(function (el) {
+                el.classList.remove('active');
+            });
+            if (btnEl) btnEl.classList.add('active');
+            selectedLangPrefix = prefix;
+            selectedCategoryId = null;
+            renderGroupedServicePills(prefix);
         }
 
         function selectCategory(categoryId, btnEl) {
@@ -2151,6 +2198,48 @@
             if (btnEl) btnEl.classList.add('active');
             selectedCategoryId = categoryId;
             renderServicePills(categoryId);
+        }
+
+        // يعرض كل الأقسام الفرعية للغة المختارة (دروس الدعم، المستويات، الامتحانات...) مجمّعة معاً
+        function renderGroupedServicePills(prefix) {
+            var lvl3Title = document.getElementById('level3Title');
+            var lvl3Content = document.getElementById('level3Content');
+            var subCats = CATEGORIES.filter(function (c) {
+                return c.fields === selectedFieldId && splitCategoryName(c.name) && splitCategoryName(c.name).prefix === prefix;
+            });
+
+            lvl3Title.innerHTML = '<i class="fa-solid fa-layer-group"></i> الخطوة ③: الأقسام المتاحة لـ (' + prefix + ') - حدد ما يناسبك:';
+            lvl3Content.innerHTML = '';
+
+            subCats.forEach(function (cat) {
+                var suffix = splitCategoryName(cat.name).suffix;
+                var catServices = SERVICES.filter(function (s) { return s.category_id === cat.id; });
+
+                var block = document.createElement('div');
+                block.className = 'subgroup-block';
+
+                var title = document.createElement('div');
+                title.className = 'subgroup-title';
+                title.innerHTML = suffix;
+                block.appendChild(title);
+
+                var pillsWrap = document.createElement('div');
+                pillsWrap.className = 'pills-wrapper';
+
+                catServices.forEach(function (svc) {
+                    var pill = document.createElement('div');
+                    var isSel = selectedServices.has(svc.id);
+                    pill.className = 'course-pill ' + (isSel ? 'active' : '');
+                    pill.innerHTML = '<i class="fa-solid ' + (isSel ? 'fa-check' : 'fa-plus') + '" style="font-size:0.75rem;"></i> ' + svc.name;
+                    pill.onclick = function () { togglePill(pill, svc); };
+                    pillsWrap.appendChild(pill);
+                });
+
+                block.appendChild(pillsWrap);
+                lvl3Content.appendChild(block);
+            });
+
+            updateSummaryBar();
         }
 
         function renderServicePills(categoryId) {
@@ -2215,7 +2304,11 @@
 
         function clearSelection() {
             selectedServices.clear();
-            if (selectedCategoryId) renderServicePills(selectedCategoryId);
+            if (selectedLangPrefix) {
+                renderGroupedServicePills(selectedLangPrefix);
+            } else if (selectedCategoryId) {
+                renderServicePills(selectedCategoryId);
+            }
         }
 
         function calculateAge() {
