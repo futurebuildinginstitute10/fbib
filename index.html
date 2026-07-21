@@ -1933,11 +1933,32 @@
                         </div>
                     </div>
 
-                    <!-- Submit Button -->
+                   <!-- Submit Button -->
                     <div style="margin-top:35px; text-align:center;">
                         <button type="button" class="btn btn-primary" style="width:100%; max-width:450px; padding:16px; font-size:1.1rem;" onclick="submitFormDirectly()">
                             <i class="fa-solid fa-paper-plane"></i> إرسال وتوجيه استمارة التسجيل
                         </button>
+                    </div>
+
+                    <!-- خيارات إرسال إضافية عبر منصات التواصل -->
+                    <div style="margin-top:20px; text-align:center;">
+                        <p style="color:var(--text-muted); font-size:0.88rem; margin-bottom:12px;">
+                            <i class="fa-solid fa-share-nodes"></i> أو أرسل نفس بيانات استمارتك مباشرة عبر:
+                        </p>
+                        <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
+                            <button type="button" class="btn btn-outline" onclick="sendViaWhatsApp()">
+                                <i class="fa-brands fa-whatsapp" style="color:#25d366;"></i> WhatsApp
+                            </button>
+                            <button type="button" class="btn btn-outline" onclick="sendViaMessenger()">
+                                <i class="fa-brands fa-facebook-messenger" style="color:#1877F2;"></i> Messenger
+                            </button>
+                            <button type="button" class="btn btn-outline" onclick="sendViaTelegram()">
+                                <i class="fa-brands fa-telegram" style="color:#29b6f6;"></i> Telegram
+                            </button>
+                            <button type="button" class="btn btn-outline" onclick="sendViaInstagram()">
+                                <i class="fa-brands fa-instagram" style="color:#E1306C;"></i> Instagram
+                            </button>
+                        </div>
                     </div>
 
                 </form>
@@ -2438,6 +2459,100 @@
             }
         }
 
+
+        /* ==========================================================
+           تجميع بيانات الاستمارة وتنسيقها لإرسالها عبر منصات التواصل
+           ========================================================== */
+        function collectFormMessageData() {
+            var nom = document.getElementById('nom').value.trim();
+            var prenom = document.getElementById('prenom').value.trim();
+            var phone = document.getElementById('phone').value.trim();
+            var whatsapp = document.getElementById('whatsapp').value.trim() || phone;
+            var email = document.getElementById('email').value.trim();
+            var wilaya = document.getElementById('wilaya').value.trim();
+            var commune = document.getElementById('commune').value.trim();
+            var niveau = document.getElementById('niveau').value;
+            var sexeRadio = document.querySelector('input[name="sexe"]:checked');
+            var sexe = sexeRadio ? sexeRadio.value : '';
+            var dob = document.getElementById('dob').value || '';
+
+            var field = FIELDS.find(function (f) { return f.id === selectedFieldId; });
+            var cat = CATEGORIES.find(function (c) { return c.id === selectedCategoryId; });
+            var chosenNames = Array.from(selectedServices.values()).map(function (s) { return s.name; });
+
+            return {
+                nom: nom, prenom: prenom, sexe: sexe, dob: dob,
+                phone: phone, whatsapp: whatsapp, email: email,
+                wilaya: wilaya, commune: commune, niveau: niveau,
+                field: field ? field.name : '', category: cat ? cat.name : '',
+                services: chosenNames
+            };
+        }
+
+        function buildMessageText() {
+            var d = collectFormMessageData();
+            var lines = [];
+            lines.push('📋 طلب تسجيل جديد - معهد FBIB');
+            lines.push('');
+            lines.push('👤 الاسم: ' + d.prenom + ' ' + d.nom);
+            if (d.sexe) lines.push('⚧ الجنس: ' + d.sexe);
+            if (d.dob) lines.push('🎂 تاريخ الميلاد: ' + d.dob);
+            lines.push('📱 الهاتف: ' + d.phone);
+            if (d.whatsapp && d.whatsapp !== d.phone) lines.push('💬 واتساب: ' + d.whatsapp);
+            if (d.email) lines.push('📧 البريد: ' + d.email);
+            lines.push('📍 الولاية: ' + d.wilaya);
+            lines.push('🏘️ البلدية: ' + d.commune);
+            if (d.field) lines.push('🗂️ المجال: ' + d.field);
+            if (d.category) lines.push('📂 القسم: ' + d.category);
+            if (d.niveau) lines.push('📈 المستوى: ' + d.niveau);
+            if (d.services.length > 0) {
+                lines.push('✅ الخيارات المحددة:');
+                d.services.forEach(function (s) { lines.push('• ' + s); });
+            }
+            return lines.join('\n');
+        }
+
+        function copyTextToClipboard(text) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).catch(function () {});
+            } else {
+                var ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select();
+                try { document.execCommand('copy'); } catch (e) {}
+                document.body.removeChild(ta);
+            }
+        }
+
+        function sendViaWhatsApp() {
+            var text = encodeURIComponent(buildMessageText());
+            window.open('https://wa.me/213781950262?text=' + text, '_blank');
+        }
+
+        function sendViaMessenger() {
+            var text = encodeURIComponent(buildMessageText());
+            window.open('https://m.me/FBIB.dz?text=' + text, '_blank');
+        }
+
+        function sendViaTelegram() {
+            var text = encodeURIComponent(buildMessageText());
+            copyTextToClipboard(buildMessageText());
+            window.open('https://t.me/+213540602310?text=' + text, '_blank');
+            setTimeout(function () {
+                alert('تم فتح تيليجرام ونسخ نص الرسالة تلقائياً؛ إذا لم تظهر الرسالة معبأة، الرجاء لصقها (Paste) داخل المحادثة.');
+            }, 400);
+        }
+
+        function sendViaInstagram() {
+            copyTextToClipboard(buildMessageText());
+            window.open('https://www.instagram.com/futurebuildinginstitute', '_blank');
+            setTimeout(function () {
+                alert('تم نسخ بيانات استمارتك تلقائياً! افتح الدايركت (Direct) على انستغرام والصقها (Paste) لإرسالها لنا.');
+            }, 400);
+        }
 
         function closeModal() {
             document.getElementById('successModal').classList.remove('active');
